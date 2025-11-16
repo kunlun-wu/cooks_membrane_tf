@@ -5,37 +5,39 @@ Cook's membrane problem is a 2D plane-stress/strain benchmark problem that invol
 
 ## Section 1: Implementation of PINN for Cook's Membrane Problem
 ### Part A: Understanding the Physics
-#### Derivation of 2D Elasticity Equations (Navier Equations)
-We work in 2D with coordinates \((x,y)\). The unknown is the displacement field  
+#### 1. Derivation of 2D Elasticity Equations (Navier Equations)
+#### 2. Defining Linear Elastic Constitutive Relation (Hooke's Law)
 
-\[
-\mathbf{u}(x,y) = 
-\begin{bmatrix}
-u_x(x,y)\\
-u_y(x,y)
-\end{bmatrix}.
-\]
+### Part B: PINN Formulation
+#### 1. Total Loss Function
+#### 2. Neural Network Architecture
 
-Assumptions:
+### Part C: Implementation and Results
+#### 1. Implementation
+#### 2. Visualization
+#### 3. Comparison with Richardson Extrapolation (16.43258437)
 
-- Small deformations (small-strain kinematics).
-- Homogeneous, isotropic, linear elastic material.
-- Static equilibrium with no body forces.
-- Plane stress or plane strain reduction to 2D.
+### Part D: Critical Reflections
+#### 1. Limitations and Strengths
+#### 2. Suggestions for Improvement
+#### 3. What about elastoplastic materials?
 
-The small strain tensor is
-\[
-\boldsymbol{\varepsilon} 
-= \frac{1}{2}\left(\nabla \mathbf{u} + (\nabla \mathbf{u})^T\right).
-\]
+### Part E: Transfer Learning
 
-In components:
-\[
-\varepsilon_{xx} = \frac{\partial u_x}{\partial x},\quad
-\varepsilon_{yy} = \frac{\partial u_y}{\partial y},\quad
-\varepsilon_{xy} = \frac{1}{2}\left(
-\frac{\partial u_x}{\partial y} + \frac{\partial u_y}{\partial x}
-\right).
-\]
+## Section 2: Adaptive Sampling using Reinforcement Learning
+### Part A: Understanding Adaptive Sampling
+#### 1. Motivation for Adaptive Sampling
+#### 2. Overview of Reinforcement Learning
 
-#### Defining Linear Elastic Constitutive Relation (Hooke's Law)
+### Part B: RL-based Adaptive Sampling Strategy
+#### 1. State, Action, Reward Design
+#### 2. Integration with PINN Training Loop
+
+### Part C: Implementation and Results
+#### 1. Implementation
+#### 2. Visualization
+#### 3. Comparison with Uniform Sampling
+
+### Part D: Critical Reflections
+#### 1. Limitations and Strengths
+#### 2. Suggestions for Improvement
