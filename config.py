@@ -113,7 +113,7 @@ def get_default_config():
             w_pde=1.0,
             w_dirichlet=100.0,
             w_neumann=500.0,
-            w_free = 100.0,
+            w_free = 10.0,
             w_continuity=0.05
         ),
     )

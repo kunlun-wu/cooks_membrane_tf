@@ -29,7 +29,7 @@ d(sigma_yx)/dx + d(sigma_yy)/dy = 0
 
 * **sigma:** Stress tensor.
 * **b:** Body force vector (assumed to be 0 here).
-* 
+
 #### 2. Defining Linear Elastic Constitutive Relation (Hooke's Law)
 **Mixed Formulation (Implemented Strategy):**
 Instead of solving only for displacements (u, v), the network outputs (u, v, p), where 'p' is the hydrostatic pressure.
@@ -159,14 +159,134 @@ To analyze the performance of the PINN, visualizations are generated using the e
 * **Von Mises Stress (`von_mises.png`)**: A contour plot of the Von Mises stress distribution within the membrane. This will be shown in the next section for results.
 
 #### 3. Results (Comparison with Richardson Extrapolation of 16.43258437)
+After many struggles to get rid of volumetric locking at the no displacement state, I succeeded in making pressure as an output rather than calculating it. However, I am not sure if I have fully resolved it, as the tip displacement for all three runs using different methods still came out to be less than 10.
+
+**1. 5000-Epoch Run with Stress-Focused Sampling and Heavy Weight on Neumann BC**
+
+This run had no free boundary loss (the points on upper and lower slanted edges)
+```
+Final tip displacement and error:
+  u_tip_x = 0.050613
+  u_tip_y = 9.073532
+  tip error = 44.783%
+```
+Deformation plot:
+<p align="center">
+    <a href="https://github.com/kunlun-wu/cooks_membrane_tf">
+        <img src="https://raw.githubusercontent.com/kunlun-wu/cooks_membrane_tf/main/figures/stage1_only/deformed_shape.png">
+    </a>
+</p>
+
+Von Mises Stress plot:
+<p align="center">
+    <a href="https://github.com/kunlun-wu/cooks_membrane_tf">
+        <img src="https://raw.githubusercontent.com/kunlun-wu/cooks_membrane_tf/main/figures/stage1_only/von_mises.png">
+    </a>
+</p>
+
+Training history plot:
+<p align="center">
+    <a href="https://github.com/kunlun-wu/cooks_membrane_tf">
+        <img src="https://raw.githubusercontent.com/kunlun-wu/cooks_membrane_tf/main/figures/stage1_only/training_history.png">
+    </a>
+</p>
+
+**2. 10000-Epoch (5000 stage1 and 5000 stage2)**
+
+This run had free boundary loss (the points on upper and lower slanted edges) with a small weight. The first stage aimed to push the tip displacement far, while the second stage focused on fine-tuning the overall loss and deformation. The free boundary loss was added in the second stage in hopes of improving deformation physicality.
+```
+Final tip displacement and error:
+  u_tip_x = -0.145914
+  u_tip_y = 6.415710
+  tip error = 60.957%
+```
+Deformation plot:
+<p align="center">
+    <a href="https://github.com/kunlun-wu/cooks_membrane_tf">
+        <img src="https://raw.githubusercontent.com/kunlun-wu/cooks_membrane_tf/main/figures/stage1_2_combined/deformed_shape.png">
+    </a>
+</p>
+
+Von Mises Stress plot:
+<p align="center">
+    <a href="https://github.com/kunlun-wu/cooks_membrane_tf">
+        <img src="https://raw.githubusercontent.com/kunlun-wu/cooks_membrane_tf/main/figures/stage1_2_combined/von_mises.png">
+    </a>
+</p>
+
+Training history plot:
+<p align="center">
+    <a href="https://github.com/kunlun-wu/cooks_membrane_tf">
+        <img src="https://raw.githubusercontent.com/kunlun-wu/cooks_membrane_tf/main/figures/stage1_2_combined/training_history.png">
+    </a>
+</p>
+
+The deformation plot shows slight curves on the upper and lower edges, indicating that the free boundary loss had limited effect, but tuning the slanted boundary weight up causes further volumetric locking, so I kept it small. The effect of volumetric locking is still evident, though. The Von Mises stress plot shows a high-stress concentration at the top-left corner, which is expected due to the shear loading, and it is smoother and seems more physical than the first run. The instability observed in the second stage of training is caused by a severe "optimization shock" resulting from the aggressive curriculum schedule, specifically the increase of the free boundary weight (`w_free`) from a negligible 1e-5 in Stage 1 to a dominant 10.0 in Stage 2. During the first 5000 epochs, the network effectively ignored the stress-free boundary conditions due to their near-zero penalty, allowing significant non-physical stresses to accumulate on the edges. When the weight was suddenly multiplied by a factor of one million at the start of Stage 2, this accumulated error materialized as a massive gradient spike, forcing the optimizer to take drastic, destructive steps to satisfy the new constraint at the expense of the previously learned PDE and Neumann solutions, leading to the chaotic oscillations seen in the history plot.
+
+**3. 10000-Epoch Single-Stage Run using Fourier Features, Dirichlet BC Hard-Enforced**
+This run had no free boundary loss, and no weight for Dirichlet BC as it was hard-enforced. I replaced the standard input normalization with a Fourier mapping, hoping that the mapping of 2D coordinates into a higher-dimensional space of sines and cosines would allow the network to better capture sharp gradients, and alleviate volumetric locking.
+```
+Final tip displacement and error:
+  u_tip_x = -8.063634
+  u_tip_y = 9.009553
+  tip error = 45.173%
+```
+Deformation plot:
+<p align="center">
+    <a href="https://github.com/kunlun-wu/cooks_membrane_tf">
+        <img src="https://raw.githubusercontent.com/kunlun-wu/cooks_membrane_tf/main/figures/fourier/deformed_shape.png">
+    </a>
+</p>
+
+Von Mises Stress plot:
+<p align="center">
+    <a href="https://github.com/kunlun-wu/cooks_membrane_tf">
+        <img src="https://raw.githubusercontent.com/kunlun-wu/cooks_membrane_tf/main/figures/fourier/von_mises.png">
+    </a>
+</p>
+
+Training history plot:
+<p align="center">
+    <a href="https://github.com/kunlun-wu/cooks_membrane_tf">
+        <img src="https://raw.githubusercontent.com/kunlun-wu/cooks_membrane_tf/main/figures/fourier/training_history.png">
+    </a>
+</p>
+
+The deformation plot is not converged. But the overall shape can be seen closer to what one would expect physically, with the membrane sort of "bending" under shear load (namely the tip_x displacement was not close-to-zero, this was actually pretty close to the reference as F. Auricchio et al. got their horizontal displacement at -7.2480). The Von Mises stress plot is very broken, though. I suspect this is due to the Fourier transform amplifying high frequencies, which allows the network to capture the corner singularity but destroys the smoothness of the derivative fields. At 5000 epochs, the loss increase suddenly and upon checking the logs the vertical tip displacement was around 19 when the loss was at its minimum. Due to time constraints I could not rerun at this time, but I will update it later trying to get that low loss state back.
 
 ### Part D: Critical Reflections
-#### 1. Limitations and Strengths
+#### 1. Limitations and Strengths 
+
+Strengths:
+* Meshfree Implementation: Unlike the Finite Element Method (FEM) described in the reference text, the PINN framework did not require the generation of a complex mesh or connectivity matrices. The Isoparametric Transformation allowed the model to handle the skewed trapezoidal geometry purely through coordinate mapping within the neural network. 
+* Mixed Formulation Capability: The PINN successfully implemented a mixed-variable formulation, predicting displacement (u) and pressure (p) simultaneously. This mirrors the theoretical approach suggested for nearly incompressible materials to separate volumetric and deviatoric responses. 
+* Differentiability: The automatic differentiation (AutoDiff) inherent in TensorFlow allowed for the exact calculation of stress and strain derivatives without numerical integration errors associated with shape functions in standard FEM.
+
+Limitations:
+* Volumetric Locking: The most significant limitation observed was Volumetric Locking. The PINN converged to a tip displacement of around 9 rather than the enhanced benchmark of 16.43. This confirms that enforcing the strong form of the continuity equation (∇⋅u=0) point-wise is too restrictive, forcing the model into a shear-dominated mode to preserve volume, preventing the necessary bending kinematics. 
+* Standard method struggled to converge to the physical shape of deformation. Fourier Features enabled the network to capture this frequency and attempted bending, but they introduced excessive high-frequency noise into the stress, rendering the Von Mises plots non-physical. 
+* Optimization Complexity: The loss landscape for this coupled problem is extremely stiff. The Neumann boundary condition (driving motion) and the Incompressibility constraint (restricting motion) are directly competing objectives. Balancing these requires very iterative and time-consuming manual tuning of loss weights.
+
 #### 2. Suggestions for Improvement
+* Adaptive Sampling: Instead of static "Stress Focus" sampling, the model could dynamically evaluate PDE residuals during training. New collocation points would be added specifically in regions where the PDE residual is highest (likely the top-left singularity and the right boundary). This allows the network to "discover" where it needs resolution rather than relying on a priori assumptions.
+* Adaptive Loss Weighting: Implement a dynamic loss weighting scheme that adjusts the weights of the PDE, Dirichlet, and Neumann losses based on their relative magnitudes during training. This could help balance the competing objectives more effectively than static weights.
+* Network Architecture Tuning: Experiment with deeper networks or alternative architectures (e.g., ResNets) with skip connections (Residual Networks) to alleviate vanishing gradient and to improve the capacity to capture complex deformation patterns without overfitting. Additionally, exploring different activation functions that may better capture the non-linearities in the solution.
+
 #### 3. What about elastoplastic materials?
+Extending this PINN from linear elasticity to Elastoplasticity introduces path dependence (history) and inequality constraints (yield surfaces).
+
+Key Modifications Required:
+* Incremental Formulation: Unlike linear elasticity, plasticity must be solved incrementally over pseudo-time steps t. The network inputs would change from (x,y) to (x,y,t) or (x,y,load_step). 
+* History Variables: The network must output internal state variables in addition to displacement and pressure. 
+  * Outputs: [u,v,p,ϵ^p,α] where ϵ^p is plastic strain and α represents hardening parameters. 
+* Inequality Constraints (Yield Surface):
+  * The loss function must enforce loading/unloading conditions. 
+  * Loss term: L_yield=ReLU(f(σ,α)), where f≤0 is the yield function (e.g., Von Mises yield criterion). This penalizes stress states that lie outside the yield surface. 
+* Constitutive Law Update:
+  * The stress calculation in physics.py would no longer be Hooke's Law. It would require calculating the consistent tangent modulus or to project the trial stress back onto the yield surface.
 
 ### Part E: Transfer Learning
-due to time constraints this is not finished.
+Due to time constraints this is not finished.
 
 ## Section 2: Adaptive Sampling using Reinforcement Learning
 **this part would be my final project, not finished yet.**
